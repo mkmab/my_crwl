@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 420px;
+  min-height: 640px;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: #f8fafc;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 3px solid #f8fafc;
+  border-radius: 999px;
+}
