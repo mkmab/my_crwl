@@ -22,6 +22,24 @@ export interface AnalysisResponse {
   ai_source: string;
 }
 
+export interface CrawlResponse {
+  requested_url: string;
+  final_url: string;
+  pages: unknown[];
+  logo_url: string;
+  favicon_url: string;
+  og_image_url: string;
+  screenshot_url: string;
+  theme_colors: string[];
+  technologies: string[];
+}
+
+export interface EmailResponse {
+  subject: string;
+  body: string;
+  ai_source: string;
+}
+
 export interface DomSnapshot {
   title: string;
   url: string;
@@ -29,4 +47,25 @@ export interface DomSnapshot {
   headings: string[];
   visibleText: string;
   links: Array<{ text: string; href: string }>;
+}
+
+export type JobStageId = "idle" | "collecting" | "crawling" | "ai" | "email" | "pdf" | "complete" | "error";
+
+export interface JobStage {
+  id: JobStageId;
+  label: string;
+  state: "pending" | "active" | "done" | "error";
+}
+
+export interface ResearchJobState {
+  tab: { url: string; title: string; tabId?: number };
+  apiBaseUrl: string;
+  emailTemplate: string;
+  analysis: AnalysisResponse | null;
+  email: EmailResponse | null;
+  loading: boolean;
+  status: string;
+  error: string;
+  stages: JobStage[];
+  updatedAt: number;
 }

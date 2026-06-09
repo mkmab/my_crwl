@@ -43,6 +43,7 @@ class ReportBuilder:
             ("Trust Analysis", analysis.get("trust_analysis", {})),
             ("Technical Analysis", analysis.get("technical_analysis", {})),
             ("Recommendations", analysis.get("improvement_suggestions", {})),
+            ("Generated Cold Email", analysis.get("cold_email", {})),
         ]
         for title, value in sections:
             story.append(Paragraph(title, styles["Section"]))

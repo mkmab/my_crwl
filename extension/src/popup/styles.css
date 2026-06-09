@@ -18,6 +18,10 @@ body {
   background: #f8fafc;
 }
 
+#root {
+  min-height: 100vh;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
 }

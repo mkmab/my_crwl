@@ -37,8 +37,24 @@ class AnalyzeRequest(BaseModel):
     dom_snapshot: str | None = None
 
 
+class ResearchRequest(BaseModel):
+    crawl: CrawlResult
+    dom_snapshot: str | None = None
+
+
 class PdfRequest(BaseModel):
     analysis: dict[str, Any]
+
+
+class EmailRequest(BaseModel):
+    analysis: dict[str, Any]
+    template: str
+
+
+class EmailResponse(BaseModel):
+    subject: str
+    body: str
+    ai_source: str = "local_fallback"
 
 
 class AnalysisResponse(BaseModel):

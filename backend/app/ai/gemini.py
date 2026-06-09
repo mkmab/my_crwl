@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import Any
 
-from app.models import AnalysisResponse, CrawlResult
+from app.models import AnalysisResponse, CrawlResult, EmailResponse
 from app.utils.config import settings
 
 
@@ -87,6 +87,27 @@ class GeminiAnalyzer:
                 f"{exc}\n{tb}"
             ) from exc
 
+    async def generate_email(self, analysis: dict[str, Any], template: str) -> EmailResponse:
+        fallback = self.local_email(analysis, template)
+        if not settings.gemini_api_key:
+            return fallback
+
+        try:
+            import google.generativeai as genai
+
+            genai.configure(api_key=settings.gemini_api_key)
+            response = await asyncio.wait_for(
+                asyncio.to_thread(self._generate_with_available_model_sync, genai, self._email_prompt(analysis, template)),
+                timeout=settings.gemini_timeout_seconds,
+            )
+            text = getattr(response, "text", None) or getattr(response, "output", None) or str(response)
+            parsed = self._parse_json(text)
+            subject = str(parsed.get("subject") or fallback.subject).strip()
+            body = str(parsed.get("body") or fallback.body).strip()
+            return EmailResponse(subject=subject[:120], body=body, ai_source="gemini")
+        except Exception:
+            return fallback
+
     def _generate_with_available_model_sync(self, genai, prompt: str):
         model_names = list(dict.fromkeys([settings.gemini_model, *GEMINI_MODEL_FALLBACKS]))
         errors: list[str] = []
@@ -153,6 +174,60 @@ class GeminiAnalyzer:
             + ". Use concise but specific recommendations. Input:\n"
             + json.dumps(payload, ensure_ascii=True)[:60000]
         )
+
+    def _email_prompt(self, analysis: dict[str, Any], template: str) -> str:
+        payload = {
+            "website_name": analysis.get("website_name"),
+            "website_url": analysis.get("website_url"),
+            "short_summary": analysis.get("short_summary"),
+            "category_analysis": analysis.get("category_analysis"),
+            "business_analysis": analysis.get("business_analysis"),
+            "seo_analysis": analysis.get("seo_analysis"),
+            "ui_ux_analysis": analysis.get("ui_ux_analysis"),
+            "trust_analysis": analysis.get("trust_analysis"),
+            "technical_analysis": analysis.get("technical_analysis"),
+            "content_analysis": analysis.get("content_analysis"),
+            "improvement_suggestions": analysis.get("improvement_suggestions"),
+        }
+        return (
+            "You write concise, personalized cold email based only on verified website research. "
+            "Do not invent facts, numbers, clients, pricing, or private information. "
+            "Use specific findings only when they appear in the provided analysis. "
+            "If a finding is uncertain, phrase it as a visible site opportunity, not a hard claim. "
+            "Return only valid JSON with keys subject and body. "
+            "Use this user-provided structure as the style and flow, but replace placeholders with accurate details:\n"
+            + template[:5000]
+            + "\n\nWebsite analysis:\n"
+            + json.dumps(payload, ensure_ascii=True)[:30000]
+        )
+
+    def local_email(self, analysis: dict[str, Any], template: str) -> EmailResponse:
+        website_url = str(analysis.get("website_url") or "")
+        domain = website_url.replace("https://", "").replace("http://", "").split("/")[0] or str(analysis.get("website_name") or "your site")
+        category = self._email_value(analysis.get("category_analysis", {}), "primary_category", "business")
+        recommendations = analysis.get("improvement_suggestions", {})
+        issue = "a clearer above-the-fold value proposition"
+        if isinstance(recommendations, dict):
+            priority = recommendations.get("priority") or recommendations.get("quick_wins") or recommendations.get("details")
+            if isinstance(priority, list) and priority:
+                issue = str(priority[0])
+            elif isinstance(priority, str) and priority:
+                issue = priority
+        subject = f"quick site note for {domain}"
+        body = (
+            f"Your homepage could use {issue} -- which means some visitors may not immediately understand why to trust or contact you.\n\n"
+            f"For a {category}, that usually means lost leads, weaker traffic conversion, or less buyer confidence.\n\n"
+            f"I fix this kind of thing for {category.lower()} websites.\n\n"
+            "I put together a quick free site note with the exact page-level fixes -- want me to send it over?"
+        )
+        return EmailResponse(subject=subject, body=body, ai_source="local_fallback")
+
+    def _email_value(self, data: Any, key: str, default: str) -> str:
+        if isinstance(data, dict):
+            value = data.get(key)
+            if value:
+                return str(value)
+        return default
 
     def _parse_json(self, text: str) -> dict[str, Any]:
         cleaned = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
