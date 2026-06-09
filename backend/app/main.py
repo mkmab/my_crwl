@@ -6,7 +6,6 @@ from app.routes.analysis import router as analysis_router
 from app.utils.config import settings
 from app.utils.storage import ensure_storage
 
-
 ensure_storage()
 
 app = FastAPI(

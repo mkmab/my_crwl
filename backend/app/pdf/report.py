@@ -152,6 +152,8 @@ class ReportBuilder:
             ("TOPPADDING", (0, 0), (-1, -1), 7),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
         ]))
+        table.splitByRow = 1
+        table.splitInRow = 1
         return table
 
     def _palette(self, palette: list[str]) -> list[Any]:
@@ -224,7 +226,14 @@ class ReportBuilder:
 
     def _stringify(self, value: Any) -> str:
         if isinstance(value, list):
-            return ", ".join(str(item) for item in value[:12])
+            rendered = ", ".join(str(item) for item in value[:12])
+            return self._truncate(rendered)
         if isinstance(value, dict):
-            return "; ".join(f"{self._label(str(k))}: {self._stringify(v)}" for k, v in value.items())
-        return str(value)
+            rendered = "; ".join(f"{self._label(str(k))}: {self._stringify(v)}" for k, v in value.items())
+            return self._truncate(rendered)
+        return self._truncate(str(value))
+
+    def _truncate(self, text: str, limit: int = 1200) -> str:
+        if len(text) <= limit:
+            return text
+        return text[:limit].rstrip() + " ..."

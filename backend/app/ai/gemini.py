@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any
 
@@ -32,16 +33,20 @@ GEMINI_MODEL_FALLBACKS = [
 
 class GeminiAnalyzer:
     async def analyze(self, crawl: CrawlResult, dom_snapshot: str | None = None) -> AnalysisResponse:
-        fallback = self.local_analysis(crawl)
         if not settings.gemini_api_key:
-            return fallback
+            raise RuntimeError("GEMINI_API_KEY is required for AI analysis.")
+
+        fallback = self.local_analysis(crawl)
 
         try:
             import google.generativeai as genai
             import traceback
 
             genai.configure(api_key=settings.gemini_api_key)
-            response = await self._generate_with_available_model(genai, self._prompt(crawl, dom_snapshot))
+            response = await asyncio.wait_for(
+                asyncio.to_thread(self._generate_with_available_model_sync, genai, self._prompt(crawl, dom_snapshot)),
+                timeout=settings.gemini_timeout_seconds,
+            )
             text = getattr(response, "text", None) or getattr(response, "output", None) or str(response)
             parsed = self._parse_json(text)
             # Normalize parsed output: fields expected as dicts should be dicts
@@ -74,32 +79,23 @@ class GeminiAnalyzer:
             result = AnalysisResponse(**merged_candidate)
             return result
         except Exception as exc:
-            # Capture full traceback so caller can debug authentication, quota, or API errors
             import traceback
 
             tb = traceback.format_exc()
-            data = fallback.model_dump()
-            tech = data.get("technical_analysis", {}) or {}
-            tech["ai_error"] = str(exc)
-            tech["ai_error_trace"] = tb
-            tech["ai_notes"] = (
-                "Ensure the Google Generative API is enabled for your project, your API key or service account has access, "
-                "and the `settings.gemini_api_key` value is correct. For Gemini Advanced models verify billing and project access."
-            )
-            data["technical_analysis"] = tech
-            return AnalysisResponse(**data)
+            raise RuntimeError(
+                "Gemini analysis failed. Check the API key, model quota, billing, and model name.\n"
+                f"{exc}\n{tb}"
+            ) from exc
 
-    async def _generate_with_available_model(self, genai, prompt: str):
+    def _generate_with_available_model_sync(self, genai, prompt: str):
         model_names = list(dict.fromkeys([settings.gemini_model, *GEMINI_MODEL_FALLBACKS]))
         errors: list[str] = []
         for model_name in model_names:
             try:
                 model = genai.GenerativeModel(model_name)
-                return await model.generate_content_async(prompt)
+                return model.generate_content(prompt)
             except Exception as exc:
                 errors.append(f"{model_name}: {exc}")
-                if "not found" not in str(exc).lower() and "not supported" not in str(exc).lower():
-                    raise
 
         raise RuntimeError("No configured Gemini model could generate content. Tried " + "; ".join(errors))
 

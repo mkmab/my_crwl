@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
+    gemini_timeout_seconds: int = 45
     app_base_url: str = "http://127.0.0.1:8000"
     storage_dir: str = "storage"
     crawl_max_pages: int = 6

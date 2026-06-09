@@ -1,6 +1,8 @@
+import asyncio
 import urllib.robotparser
 from dataclasses import dataclass
 from urllib.parse import urlparse
+import sys
 
 import requests
 
@@ -92,15 +94,7 @@ class WebsiteCrawler:
         if not settings.allow_playwright:
             return ""
         try:
-            from playwright.async_api import async_playwright
-
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page(viewport={"width": 1440, "height": 1200})
-                await page.goto(url, wait_until="networkidle", timeout=settings.crawl_timeout_seconds * 1000)
-                html = await page.content()
-                await browser.close()
-                return html
+            return await asyncio.to_thread(self._fetch_with_playwright_sync, url)
         except Exception:
             return ""
 
@@ -108,18 +102,46 @@ class WebsiteCrawler:
         if not settings.allow_playwright:
             return ""
         try:
-            from playwright.async_api import async_playwright
-
-            path = storage_path("screenshots", ".png")
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
-                await page.goto(url, wait_until="networkidle", timeout=settings.crawl_timeout_seconds * 1000)
-                await page.screenshot(path=str(path), full_page=False)
-                await browser.close()
-            return public_url(path)
+            return await asyncio.to_thread(self._capture_screenshot_sync, url)
         except Exception:
             return ""
+
+    def _fetch_with_playwright_sync(self, url: str) -> str:
+        from playwright.sync_api import sync_playwright
+
+        previous_policy = asyncio.get_event_loop_policy()
+        try:
+            if sys.platform == "win32":
+                asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page(viewport={"width": 1440, "height": 1200})
+                page.goto(url, wait_until="networkidle", timeout=settings.crawl_timeout_seconds * 1000)
+                html = page.content()
+                browser.close()
+                return html
+        finally:
+            if sys.platform == "win32":
+                asyncio.set_event_loop_policy(previous_policy)
+
+    def _capture_screenshot_sync(self, url: str) -> str:
+        from playwright.sync_api import sync_playwright
+
+        path = storage_path("screenshots", ".png")
+        previous_policy = asyncio.get_event_loop_policy()
+        try:
+            if sys.platform == "win32":
+                asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
+                page.goto(url, wait_until="networkidle", timeout=settings.crawl_timeout_seconds * 1000)
+                page.screenshot(path=str(path), full_page=False)
+                browser.close()
+        finally:
+            if sys.platform == "win32":
+                asyncio.set_event_loop_policy(previous_policy)
+        return public_url(path)
 
     def _needs_browser(self, html: str) -> bool:
         lower = html.lower()
