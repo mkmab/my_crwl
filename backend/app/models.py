@@ -30,16 +30,22 @@ class CrawlResult(BaseModel):
     screenshot_url: str = ""
     theme_colors: list[str] = Field(default_factory=list)
     technologies: list[str] = Field(default_factory=list)
+    owner_name: str | None = None
+    owner_email: str | None = None
+    owner_first_name: str | None = None
+    owner_last_name: str | None = None
 
 
 class AnalyzeRequest(BaseModel):
     url: HttpUrl
     dom_snapshot: str | None = None
+    ai_model: str | None = "auto"
 
 
 class ResearchRequest(BaseModel):
     crawl: CrawlResult
     dom_snapshot: str | None = None
+    ai_model: str | None = "auto"
 
 
 class PdfRequest(BaseModel):
@@ -49,6 +55,11 @@ class PdfRequest(BaseModel):
 class EmailRequest(BaseModel):
     analysis: dict[str, Any]
     template: str
+    ai_model: str | None = "auto"
+
+
+class StopRequest(BaseModel):
+    url: HttpUrl
 
 
 class EmailResponse(BaseModel):
@@ -79,3 +90,7 @@ class AnalysisResponse(BaseModel):
     screenshot_url: str = ""
     pdf_url: str = ""
     ai_source: str = "local_fallback"
+    owner_name: str | None = None
+    owner_email: str | None = None
+    owner_first_name: str | None = None
+    owner_last_name: str | None = None

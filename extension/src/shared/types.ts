@@ -20,6 +20,10 @@ export interface AnalysisResponse {
   screenshot_url: string;
   pdf_url: string;
   ai_source: string;
+  owner_name: string | null;
+  owner_email: string | null;
+  owner_first_name: string | null;
+  owner_last_name: string | null;
 }
 
 export interface CrawlResponse {
@@ -32,6 +36,8 @@ export interface CrawlResponse {
   screenshot_url: string;
   theme_colors: string[];
   technologies: string[];
+  owner_name: string | null;
+  owner_email: string | null;
 }
 
 export interface EmailResponse {
@@ -49,7 +55,15 @@ export interface DomSnapshot {
   links: Array<{ text: string; href: string }>;
 }
 
-export type JobStageId = "idle" | "collecting" | "crawling" | "ai" | "email" | "pdf" | "complete" | "error";
+export type JobStageId =
+  | "idle"
+  | "collecting"
+  | "crawling"
+  | "ai"
+  | "email"
+  | "pdf"
+  | "complete"
+  | "error";
 
 export interface JobStage {
   id: JobStageId;

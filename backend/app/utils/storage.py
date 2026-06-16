@@ -4,9 +4,12 @@ from uuid import uuid4
 from app.utils.config import settings
 
 
+FOLDERS = ("reports", "screenshots", "logos")
+
+
 def ensure_storage() -> Path:
     root = Path(settings.storage_dir)
-    for child in ("reports", "screenshots", "logos"):
+    for child in FOLDERS:
         (root / child).mkdir(parents=True, exist_ok=True)
     return root
 

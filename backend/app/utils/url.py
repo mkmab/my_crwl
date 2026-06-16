@@ -22,3 +22,15 @@ def absolute_url(base_url: str, href: str | None) -> str | None:
     if href.startswith(("mailto:", "tel:", "javascript:", "#")):
         return None
     return normalize_url(urljoin(base_url, href))
+
+
+def extract_domain(url: str) -> str:
+    """Return bare domain without www, scheme, or path. e.g. 'example.com'"""
+    return urlparse(normalize_url(url)).netloc.lower().removeprefix("www.")
+
+
+def extract_company_name(url: str) -> str:
+    """Best-effort company name from domain. e.g. 'example.com' → 'Example'"""
+    domain = extract_domain(url)
+    name = domain.split(".")[0]
+    return name.replace("-", " ").replace("_", " ").title()

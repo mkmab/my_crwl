@@ -1,4 +1,12 @@
-import type { AnalysisResponse, CrawlResponse, DomSnapshot, EmailResponse, JobStage, JobStageId, ResearchJobState } from "../shared/types";
+import type {
+  AnalysisResponse,
+  CrawlResponse,
+  DomSnapshot,
+  EmailResponse,
+  JobStage,
+  JobStageId,
+  ResearchJobState,
+} from "../shared/types";
 
 const fallbackApi = "http://127.0.0.1:8000";
 const stateKey = "researchJobState";
@@ -13,23 +21,30 @@ const stageLabels: Record<JobStageId, string> = {
   email: "Generating personalized cold email",
   pdf: "Making PDF report",
   complete: "Final process complete",
-  error: "Needs attention"
+  error: "Needs attention",
 };
 
-const orderedStages: JobStageId[] = ["collecting", "crawling", "ai", "email", "pdf", "complete"];
+const orderedStages: JobStageId[] = [
+  "collecting",
+  "crawling",
+  "ai",
+  "email",
+  "pdf",
+  "complete",
+];
 
 let jobState: ResearchJobState = {
   tab: { url: "", title: "" },
   apiBaseUrl: fallbackApi,
   emailTemplate: defaultEmailTemplate,
-  aiModel: "gemini",
+  aiModel: "auto",
   analysis: null,
   email: null,
   loading: false,
   status: stageLabels.idle,
   error: "",
   stages: makeStages("idle"),
-  updatedAt: Date.now()
+  updatedAt: Date.now(),
 };
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -66,16 +81,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "SAVE_SETTINGS") {
     const apiBaseUrl = String(message.apiBaseUrl || fallbackApi);
     const emailTemplate = String(message.emailTemplate || defaultEmailTemplate);
-    const aiModel = String(message.aiModel || "gemini");
+    const aiModel = String(message.aiModel || "auto");
     chrome.storage.sync.set({ apiBaseUrl });
-    updateState({ apiBaseUrl, emailTemplate, aiModel }).then(() => sendResponse({ ok: true }));
+    updateState({ apiBaseUrl, emailTemplate, aiModel }).then(() =>
+      sendResponse({ ok: true }),
+    );
     return true;
   }
 
   if (message?.type === "START_ANALYSIS") {
     runAnalysis().then(
       () => sendResponse({ ok: true }),
-      (error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Analysis failed" })
+      (error) =>
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : "Analysis failed",
+        }),
     );
     return true;
   }
@@ -93,11 +114,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             // ignore
           }
         }
-        await updateState({ loading: false, status: stageLabels.idle, stages: makeStages("idle") });
+        await updateState({
+          loading: false,
+          status: stageLabels.idle,
+          stages: makeStages("idle"),
+        });
         sendResponse({ ok: true });
       })
       .catch((err) => {
-        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
     return true;
   }
@@ -122,7 +150,7 @@ async function runAnalysis() {
     loading: true,
     error: "",
     status: stageLabels.collecting,
-    stages: makeStages("collecting")
+    stages: makeStages("collecting"),
   });
 
   try {
@@ -131,27 +159,39 @@ async function runAnalysis() {
     const crawl = await postJson<CrawlResponse>(`${apiBaseUrl}/crawl`, {
       url: tab.url,
       dom_snapshot: dom ? JSON.stringify(dom) : undefined,
-      ai_model: stored.aiModel || "gemini"
+      ai_model: stored.aiModel || "auto",
     });
 
     await setStage("ai", "Crawling complete. Sending website research to AI.");
-    const research = await postJson<AnalysisResponse>(`${apiBaseUrl}/research-from-crawl`, {
-      crawl,
-      dom_snapshot: dom ? JSON.stringify(dom) : undefined,
-      ai_model: stored.aiModel || "gemini"
-    });
+    const research = await postJson<AnalysisResponse>(
+      `${apiBaseUrl}/research-from-crawl`,
+      {
+        crawl,
+        dom_snapshot: dom ? JSON.stringify(dom) : undefined,
+        ai_model: stored.aiModel || "auto",
+      },
+    );
     await updateState({ analysis: research });
 
     await setStage("email");
-    const email = await postJson<EmailResponse>(`${apiBaseUrl}/generate-email`, {
-      analysis: research,
-      template: emailTemplate,
-      ai_model: stored.aiModel || "gemini"
-    });
+    const email = await postJson<EmailResponse>(
+      `${apiBaseUrl}/generate-email`,
+      {
+        analysis: research,
+        template: emailTemplate,
+        ai_model: stored.aiModel || "auto",
+      },
+    );
     await updateState({ email });
 
     await setStage("pdf");
-    const pdf = await postJson<{ pdf_url: string }>(`${apiBaseUrl}/generate-pdf`, { analysis: { ...research, cold_email: email }, ai_model: stored.aiModel || "gemini" });
+    const pdf = await postJson<{ pdf_url: string }>(
+      `${apiBaseUrl}/generate-pdf`,
+      {
+        analysis: { ...research, cold_email: email },
+        ai_model: stored.aiModel || "auto",
+      },
+    );
     const analysisWithPdf = { ...research, pdf_url: pdf.pdf_url };
 
     await updateState({
@@ -159,14 +199,14 @@ async function runAnalysis() {
       loading: false,
       status: stageLabels.complete,
       stages: makeStages("complete"),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     });
   } catch (error) {
     await updateState({
       loading: false,
       error: error instanceof Error ? error.message : "Analysis failed",
       status: "Check backend connection or AI configuration",
-      stages: makeStages("error")
+      stages: makeStages("error"),
     });
     throw error;
   }
@@ -175,7 +215,9 @@ async function runAnalysis() {
 async function collectDom(tabId?: number): Promise<DomSnapshot | null> {
   if (!tabId) return null;
   try {
-    return (await chrome.tabs.sendMessage(tabId, { type: "COLLECT_DOM" })) as DomSnapshot;
+    return (await chrome.tabs.sendMessage(tabId, {
+      type: "COLLECT_DOM",
+    })) as DomSnapshot;
   } catch {
     return null;
   }
@@ -191,7 +233,7 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const detail = await response.text();
@@ -215,7 +257,9 @@ async function loadState(): Promise<ResearchJobState> {
 async function updateState(patch: Partial<ResearchJobState>) {
   jobState = { ...jobState, ...patch, updatedAt: Date.now() };
   await persistState(jobState);
-  chrome.runtime.sendMessage({ type: "JOB_STATE_UPDATED", state: jobState }).catch(() => undefined);
+  chrome.runtime
+    .sendMessage({ type: "JOB_STATE_UPDATED", state: jobState })
+    .catch(() => undefined);
 }
 
 async function persistState(state: ResearchJobState) {
@@ -224,14 +268,25 @@ async function persistState(state: ResearchJobState) {
 
 function makeStages(active: JobStageId): JobStage[] {
   return orderedStages.map((id) => {
-    if (active === "idle") return { id, label: stageLabels[id], state: "pending" };
-    if (active === "error") return { id, label: stageLabels[id], state: id === "complete" ? "pending" : "error" };
+    if (active === "idle")
+      return { id, label: stageLabels[id], state: "pending" };
+    if (active === "error")
+      return {
+        id,
+        label: stageLabels[id],
+        state: id === "complete" ? "pending" : "error",
+      };
     const activeIndex = orderedStages.indexOf(active);
     const index = orderedStages.indexOf(id);
     return {
       id,
       label: stageLabels[id],
-      state: index < activeIndex ? "done" : index === activeIndex ? "active" : "pending"
+      state:
+        index < activeIndex
+          ? "done"
+          : index === activeIndex
+            ? "active"
+            : "pending",
     };
   });
 }

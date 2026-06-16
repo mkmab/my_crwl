@@ -41,19 +41,26 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python -m playwright install chromium
-copy .env.example .env
+copy env.example .env
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Add your free Gemini key to `backend/.env`:
+Add at least one free-tier AI key to `backend/.env`:
 
 ```env
 GEMINI_API_KEY=your_key_here
 # Optional. Use a model returned by `python scripts/list_models.py`.
 GEMINI_MODEL=gemini-2.0-flash
+
+HUGGINGFACE_API_KEY=your_key_here
+# Small instruct model that works better on free/shared inference.
+HUGGINGFACE_MODEL=google/gemma-2-2b-it
+
+# Keep this false if you want only high-confidence on-site owner/contact data.
+ALLOW_EXTERNAL_CONTACT_ENRICHMENT=false
 ```
 
-The backend is usable without a Gemini key; it returns deterministic local analysis with an `ai_source` value of `local_fallback`.
+The extension now supports `Auto` mode, which tries Gemini first and then Hugging Face before falling back to deterministic local analysis. The response includes `ai_source` so you can verify whether AI was actually used.
 
 ## Extension Setup
 
@@ -71,6 +78,8 @@ Open Chrome:
 4. Select `extension/dist`.
 
 The popup expects the backend at `http://127.0.0.1:8000`. You can change this in the popup settings field.
+
+In the popup, leave `AI Model` on `Auto (Gemini → Hugging Face)` unless you want to force one provider.
 
 ## API
 
@@ -90,5 +99,5 @@ curl -X POST http://127.0.0.1:8000/analyze ^
 
 - Runs locally.
 - Uses free/open-source packages.
-- Uses Google Gemini API, which has a free tier subject to Google limits.
+- Uses Google Gemini API and Hugging Face Inference free-tier endpoints, with automatic provider fallback.
 - PDF files and screenshots are stored in `backend/storage`.
