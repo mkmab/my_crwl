@@ -25,6 +25,7 @@ const emptyState: ResearchJobState = {
   tab: { url: "", title: "" },
   apiBaseUrl: fallbackApi,
   emailTemplate: defaultEmailTemplate,
+  aiModel: "gemini",
   analysis: null,
   email: null,
   loading: false,
@@ -52,21 +53,28 @@ function App() {
     return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
 
-  function saveSettings(next: Partial<Pick<ResearchJobState, "apiBaseUrl" | "emailTemplate">>) {
-    const updated = { ...state, ...next };
-    setState(updated);
-    chrome.runtime.sendMessage({
-      type: "SAVE_SETTINGS",
-      apiBaseUrl: updated.apiBaseUrl,
-      emailTemplate: updated.emailTemplate
+  function saveSettings(next: Partial<Pick<ResearchJobState, "apiBaseUrl" | "emailTemplate" | "aiModel">>) {
+    setState((prev) => {
+      const updated = { ...prev, ...next } as ResearchJobState;
+      chrome.runtime.sendMessage({
+        type: "SAVE_SETTINGS",
+        apiBaseUrl: updated.apiBaseUrl,
+        emailTemplate: updated.emailTemplate,
+        aiModel: (updated as any).aiModel || "gemini"
+      });
+      return updated;
     });
   }
 
   function startAnalysis() {
     setCopied(false);
-    chrome.runtime.sendMessage({ type: "SAVE_SETTINGS", apiBaseUrl: state.apiBaseUrl, emailTemplate: state.emailTemplate }, () => {
+    chrome.runtime.sendMessage({ type: "SAVE_SETTINGS", apiBaseUrl: state.apiBaseUrl, emailTemplate: state.emailTemplate, aiModel: (state as any).aiModel || "gemini" }, () => {
       chrome.runtime.sendMessage({ type: "START_ANALYSIS" });
     });
+  }
+
+  function stopAnalysis() {
+    chrome.runtime.sendMessage({ type: "STOP_ANALYSIS" });
   }
 
   async function copyEmail() {
@@ -76,7 +84,8 @@ function App() {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
-  const disabled = state.loading || !state.tab.url || state.tab.url.startsWith("chrome://");
+  const tabUrl = (state && (state as any).tab && (state as any).tab.url) || "";
+  const disabled = Boolean(state?.loading) || !tabUrl || (typeof tabUrl === "string" && tabUrl.startsWith("chrome://"));
 
   return (
     <main className="min-h-screen w-[420px] overflow-hidden bg-[#f8fafc] text-slate-950">
@@ -114,6 +123,16 @@ function App() {
             aria-label="Backend API URL"
           />
 
+          <label className="mt-3 block text-xs font-semibold text-slate-700">AI Model</label>
+          <select
+            value={(state as any).aiModel || "gemini"}
+            onChange={(e) => saveSettings({ aiModel: e.target.value })}
+            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs outline-none"
+          >
+            <option value="gemini">Gemini</option>
+            <option value="huggingface">Hugging Face</option>
+          </select>
+
           <label className="mt-4 block text-xs font-semibold text-slate-700" htmlFor="email-template">
             Cold email format
           </label>
@@ -124,14 +143,23 @@ function App() {
             className="mt-2 min-h-[148px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 outline-none transition focus:border-slate-400"
           />
 
-          <button
-            onClick={startAnalysis}
-            disabled={disabled}
-            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white shadow-glow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-          >
-            {state.loading ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />}
-            {state.loading ? "Working in background" : "Analyze and Generate Email"}
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={startAnalysis}
+              disabled={disabled}
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white shadow-glow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+            >
+              {state.loading ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />}
+              {state.loading ? "Working in background" : "Analyze and Generate Email"}
+            </button>
+            <button
+              onClick={stopAnalysis}
+              disabled={!state.loading}
+              className="flex h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-40"
+            >
+              Stop
+            </button>
+          </div>
 
           <p className="mt-3 flex items-center gap-2 text-xs text-slate-500">
             <Activity size={14} />

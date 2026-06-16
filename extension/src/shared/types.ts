@@ -61,6 +61,7 @@ export interface ResearchJobState {
   tab: { url: string; title: string; tabId?: number };
   apiBaseUrl: string;
   emailTemplate: string;
+  aiModel?: string;
   analysis: AnalysisResponse | null;
   email: EmailResponse | null;
   loading: boolean;

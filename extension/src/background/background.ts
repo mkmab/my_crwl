@@ -22,6 +22,7 @@ let jobState: ResearchJobState = {
   tab: { url: "", title: "" },
   apiBaseUrl: fallbackApi,
   emailTemplate: defaultEmailTemplate,
+  aiModel: "gemini",
   analysis: null,
   email: null,
   loading: false,
@@ -65,8 +66,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "SAVE_SETTINGS") {
     const apiBaseUrl = String(message.apiBaseUrl || fallbackApi);
     const emailTemplate = String(message.emailTemplate || defaultEmailTemplate);
+    const aiModel = String(message.aiModel || "gemini");
     chrome.storage.sync.set({ apiBaseUrl });
-    updateState({ apiBaseUrl, emailTemplate }).then(() => sendResponse({ ok: true }));
+    updateState({ apiBaseUrl, emailTemplate, aiModel }).then(() => sendResponse({ ok: true }));
     return true;
   }
 
@@ -75,6 +77,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       () => sendResponse({ ok: true }),
       (error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Analysis failed" })
     );
+    return true;
+  }
+
+  if (message?.type === "STOP_ANALYSIS") {
+    // attempt to cancel running backend job (use promises to avoid top-level await in listener)
+    loadState()
+      .then(async (stored) => {
+        const apiBaseUrl = normalizeApi(stored.apiBaseUrl || fallbackApi);
+        const url = stored.tab?.url;
+        if (url) {
+          try {
+            await postJson(`${apiBaseUrl}/stop`, { url });
+          } catch (err) {
+            // ignore
+          }
+        }
+        await updateState({ loading: false, status: stageLabels.idle, stages: makeStages("idle") });
+        sendResponse({ ok: true });
+      })
+      .catch((err) => {
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+      });
     return true;
   }
 
@@ -106,25 +130,28 @@ async function runAnalysis() {
     await setStage("crawling");
     const crawl = await postJson<CrawlResponse>(`${apiBaseUrl}/crawl`, {
       url: tab.url,
-      dom_snapshot: dom ? JSON.stringify(dom) : undefined
+      dom_snapshot: dom ? JSON.stringify(dom) : undefined,
+      ai_model: stored.aiModel || "gemini"
     });
 
     await setStage("ai", "Crawling complete. Sending website research to AI.");
     const research = await postJson<AnalysisResponse>(`${apiBaseUrl}/research-from-crawl`, {
       crawl,
-      dom_snapshot: dom ? JSON.stringify(dom) : undefined
+      dom_snapshot: dom ? JSON.stringify(dom) : undefined,
+      ai_model: stored.aiModel || "gemini"
     });
     await updateState({ analysis: research });
 
     await setStage("email");
     const email = await postJson<EmailResponse>(`${apiBaseUrl}/generate-email`, {
       analysis: research,
-      template: emailTemplate
+      template: emailTemplate,
+      ai_model: stored.aiModel || "gemini"
     });
     await updateState({ email });
 
     await setStage("pdf");
-    const pdf = await postJson<{ pdf_url: string }>(`${apiBaseUrl}/generate-pdf`, { analysis: { ...research, cold_email: email } });
+    const pdf = await postJson<{ pdf_url: string }>(`${apiBaseUrl}/generate-pdf`, { analysis: { ...research, cold_email: email }, ai_model: stored.aiModel || "gemini" });
     const analysisWithPdf = { ...research, pdf_url: pdf.pdf_url };
 
     await updateState({
