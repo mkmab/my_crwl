@@ -7,11 +7,13 @@ import type {
   JobStageId,
   ResearchJobState,
 } from "../shared/types";
+import {
+  customTemplateId,
+  defaultEmailTemplate,
+} from "../shared/emailTemplates";
 
 const fallbackApi = "http://127.0.0.1:8000";
 const stateKey = "researchJobState";
-const defaultEmailTemplate =
-  '[their domain] or "quick site note" or "website question"\n\nYour [X page] is missing [specific thing] -- which means [consequence].\n\nFor a [type of business], that usually means [lost revenue / traffic / trust].\n\nI fix this kind of thing for [type of business].\n\nI put together [specific free thing] -- want me to send it over?';
 
 const stageLabels: Record<JobStageId, string> = {
   idle: "Ready",
@@ -37,6 +39,8 @@ let jobState: ResearchJobState = {
   tab: { url: "", title: "" },
   apiBaseUrl: fallbackApi,
   emailTemplate: defaultEmailTemplate,
+  selectedEmailTemplateId: customTemplateId,
+  selectedSignatureTemplateId: "simple",
   aiModel: "auto",
   analysis: null,
   email: null,
@@ -82,8 +86,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const apiBaseUrl = String(message.apiBaseUrl || fallbackApi);
     const emailTemplate = String(message.emailTemplate || defaultEmailTemplate);
     const aiModel = String(message.aiModel || "auto");
+    const selectedEmailTemplateId = String(message.selectedEmailTemplateId || customTemplateId);
+    const selectedSignatureTemplateId = String(message.selectedSignatureTemplateId || "simple");
     chrome.storage.sync.set({ apiBaseUrl });
-    updateState({ apiBaseUrl, emailTemplate, aiModel }).then(() =>
+    updateState({
+      apiBaseUrl,
+      emailTemplate,
+      selectedEmailTemplateId,
+      selectedSignatureTemplateId,
+      aiModel,
+    }).then(() =>
       sendResponse({ ok: true }),
     );
     return true;
@@ -294,3 +306,4 @@ function makeStages(active: JobStageId): JobStage[] {
 function normalizeApi(value: string) {
   return value.replace(/\/$/, "");
 }
+

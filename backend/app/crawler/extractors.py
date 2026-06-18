@@ -42,6 +42,12 @@ OWNER_TITLE_MARKERS = (
     "principal", "partner", "head of", "chief executive",
 )
 
+GENERIC_EMAIL_PREFIXES = (
+    "info", "contact", "support", "admin", "sales", "hello", "team", "mail",
+    "office", "service", "help", "careers", "jobs", "press", "marketing",
+    "billing", "accounts", "no-reply", "noreply",
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -50,11 +56,11 @@ OWNER_TITLE_MARKERS = (
 NON_NAME_TOKENS = {
     "about", "academy", "admin", "advisor", "agency", "blog", "book", "brand", "business",
     "careers", "ceo", "chief", "co", "company", "contact", "customer", "demo", "department",
-    "design", "director", "download", "enterprise", "executive", "expert", "faq", "footer",
+    "design", "digital", "director", "download", "enterprise", "executive", "expert", "faq", "footer",
     "founder", "founders", "get", "global", "group", "head", "hero", "home", "inc", "info",
-    "leadership", "learn", "llc", "login", "management", "manager", "member", "mission", "our",
+    "leadership", "learn", "llc", "login", "management", "manager", "marketing", "member", "mission", "officer", "operations", "our",
     "owner", "page", "partner", "people", "person", "portfolio", "president", "pricing", "privacy",
-    "product", "resources", "service", "solutions", "staff", "story", "support", "team", "terms",
+    "product", "resources", "sales", "service", "solutions", "staff", "story", "success", "support", "technology", "team", "terms",
     "the", "trust", "us", "view", "welcome", "who", "with", "work",
 }
 
@@ -158,6 +164,16 @@ def rank_emails(emails: list[str]) -> list[str]:
 
     return sorted(emails, key=score, reverse=True)
 
+
+def is_personal_email(email: str | None) -> bool:
+    if not email or "@" not in email:
+        return False
+    local = email.split("@", 1)[0].lower().strip()
+    if not local or local in GENERIC_EMAIL_PREFIXES:
+        return False
+    if any(local.startswith(prefix + ".") or local.startswith(prefix + "-") for prefix in GENERIC_EMAIL_PREFIXES):
+        return False
+    return bool(re.match(r"^[a-z][a-z.\-_]{1,48}$", local))
 
 # ---------------------------------------------------------------------------
 # Owner name extraction from HTML structure
@@ -456,3 +472,4 @@ def _normalize_color(value: str) -> str:
     if len(nums) == 3:
         return "#{:02x}{:02x}{:02x}".format(*[max(0, min(255, n)) for n in nums])
     return ""
+

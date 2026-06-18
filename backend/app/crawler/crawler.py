@@ -17,6 +17,7 @@ from app.crawler.extractors import (
     extract_page,
     important_internal_links,
     looks_like_person_name,
+    is_personal_email,
     rank_emails,
     OWNER_TITLE_MARKERS,
     EMAIL_RE,
@@ -106,15 +107,23 @@ class WebsiteCrawler:
 
                 # Find best personal email from this page
                 if not owner_email:
-                    deep_emails = rank_emails(extract_emails_deep(fetched.html))
-                    if deep_emails:
-                        owner_email = deep_emails[0]
+                    personal_emails = [
+                        email
+                        for email in rank_emails(extract_emails_deep(fetched.html))
+                        if is_personal_email(email)
+                    ]
+                    if personal_emails:
+                        owner_email = personal_emails[0]
 
         # Cross-check: if we have all page emails, pick the best one
         if not owner_email:
-            all_emails = rank_emails([e for p in pages for e in p.emails])
-            if all_emails:
-                owner_email = all_emails[0]
+            personal_emails = [
+                email
+                for email in rank_emails([e for p in pages for e in p.emails])
+                if is_personal_email(email)
+            ]
+            if personal_emails:
+                owner_email = personal_emails[0]
 
         # Fallback owner detection from headings/footer (original logic, improved)
         if not owner_name and pages:
@@ -126,7 +135,7 @@ class WebsiteCrawler:
             whois_info = await asyncio.to_thread(self._whois_lookup, domain)
             if not owner_name and looks_like_person_name(whois_info.get("registrant_name")):
                 owner_name = whois_info["registrant_name"]
-            if not owner_email and whois_info.get("registrant_email"):
+            if not owner_email and is_personal_email(whois_info.get("registrant_email")):
                 owner_email = whois_info["registrant_email"]
 
             linkedin_info = await self._find_linkedin_owner(domain)
@@ -136,7 +145,7 @@ class WebsiteCrawler:
         # --- Hunter.io email lookup (free tier) ---
         if not owner_email and settings.hunter_api_key:
             hunter_email = await asyncio.to_thread(self._hunter_lookup, domain)
-            if hunter_email:
+            if hunter_email and is_personal_email(hunter_email):
                 owner_email = hunter_email
 
         logo, favicon, og_image = extract_logo_and_favicon(first.url, first.html)
@@ -402,3 +411,4 @@ class WebsiteCrawler:
             return parser.can_fetch(HEADERS["User-Agent"], url)
         except Exception:
             return True
+

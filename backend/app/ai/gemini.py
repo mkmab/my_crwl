@@ -375,16 +375,18 @@ clearly named sub-keys with specific findings — no vague one-liners.
         greeting = f"Hi {first_name}" if first_name else ("Hi there" if not owner_name else f"Hi {owner_name.split()[0]}")
 
         return (
-            "You write short, specific, human cold emails for a website improvement service.\n\n"
+            "You write short, specific, human cold emails for a website development and practical AI services business.\n\n"
             "RULES — follow all of these strictly:\n"
             f"1. Open with: '{greeting},' — never use 'Dear' or generic salutations.\n"
             "2. Reference ONE specific thing you noticed on their actual website (from the data below).\n"
-            "3. Keep the email under 130 words total.\n"
-            "4. End with a single easy yes/no question.\n"
-            "5. Never claim specific ROI numbers, revenue figures, or results you cannot prove.\n"
-            "6. Never use: 'leverage', 'synergy', 'game-changer', 'revolutionize', 'skyrocket', 'transform'.\n"
-            "7. Sound like a helpful human expert, not a marketing bot.\n"
-            "8. The subject line must be 6 words or fewer and feel personal, not promotional.\n\n"
+            "3. Follow the selected template structure, but replace placeholders only with known facts from the analysis data.\n"
+            "4. If a template placeholder cannot be verified, rewrite that sentence naturally instead of inventing names, events, results, or mutual contacts.\n"
+            "5. Keep the email under 130 words total.\n"
+            "6. End with a single easy yes/no question.\n"
+            "7. Never claim specific ROI numbers, revenue figures, or results you cannot prove.\n"
+            "8. Never use: 'leverage', 'synergy', 'game-changer', 'revolutionize', 'skyrocket', 'transform'.\n"
+            "9. Sound like a helpful human expert, not a marketing bot.\n"
+            "10. The subject line must be 6 words or fewer and feel personal, not promotional.\n\n"
             "Return ONLY valid JSON with keys: subject (string) and body (string with \\n for line breaks).\n\n"
             "User's preferred email style/template to follow:\n"
             + template[:3000]
@@ -547,7 +549,8 @@ clearly named sub-keys with specific findings — no vague one-liners.
         domain = extract_domain(website_url) or str(analysis.get("website_name") or "your site")
         first_name = analysis.get("owner_first_name") or ""
         owner_name = analysis.get("owner_name") or ""
-        greeting = f"Hi {first_name}" if first_name else (f"Hi {owner_name.split()[0]}" if owner_name else "Hi there")
+        recipient = first_name or (owner_name.split()[0] if owner_name else "there")
+        greeting = f"Hi {recipient}"
 
         category = self._email_value(analysis.get("category_analysis", {}), "primary_category", "business")
 
@@ -563,17 +566,72 @@ clearly named sub-keys with specific findings — no vague one-liners.
                     else str(first)
                 )
 
+        website_name = str(analysis.get("website_name") or domain)
+        context = {
+            "name": recipient,
+            "first_name": recipient,
+            "company": website_name,
+            "company name": website_name,
+            "prospect company": website_name,
+            "website": domain,
+            "industry": category,
+            "top_issue": top_issue,
+            "process": "lead generation",
+            "priority": "website conversions",
+            "goal": "more qualified leads",
+            "content_topic": "website growth",
+            "content_name": "website audit",
+            "signature": "Best,",
+            "your_name": "",
+            "your_company": "",
+            "service": "website development and AI services",
+        }
+
+        subject = self._extract_template_field(template, "subject") or f"quick note about {domain}"
+        body = self._extract_template_field(template, "body")
+
+        if body:
+            subject = self._replace_template_placeholders(subject, context).strip() or f"quick note about {domain}"
+            body = self._replace_template_placeholders(body, context).strip()
+            if body and not body.lower().startswith(("hi ", "hello ")):
+                body = f"{greeting},\n\n{body}"
+            return EmailResponse(subject=subject[:120], body=body, ai_source="local_fallback")
+
         subject = f"quick note about {domain}"
         body = (
             f"{greeting},\n\n"
             f"I was looking at {domain} and noticed {top_issue.lower()}.\n\n"
             f"For a {category.lower()} website, that often means visitors leave before getting in touch.\n\n"
-            "I put together a quick page-by-page audit with specific fixes — want me to send it over?\n\n"
-            "Takes 2 minutes to review and is free.\n\n"
+            "I help businesses improve websites and add practical AI systems so more of their existing traffic turns into leads. Want me to send over a quick teardown?\n\n"
             "Best,"
         )
         return EmailResponse(subject=subject, body=body, ai_source="local_fallback")
 
+    def _extract_template_field(self, template: str, field: str) -> str:
+        import re
+
+        if not template:
+            return ""
+        if field == "subject":
+            match = re.search(r"(?im)^\s*Subject:\s*(.+)$", template)
+            return match.group(1).strip() if match else ""
+        match = re.search(r"(?is)^\s*Body:\s*(.+)$", template)
+        return match.group(1).strip() if match else ""
+
+    def _replace_template_placeholders(self, text: str, context: dict[str, str]) -> str:
+        import re
+
+        def replace(match) -> str:
+            key = match.group(1).strip().lower().replace("-", "_")
+            return context.get(key) or context.get(key.replace("_", " ")) or ""
+
+        rendered = re.sub(r"\{\{\s*([^}]+?)\s*\}\}", replace, text)
+        rendered = re.sub(r"\{\s*([^}]+?)\s*\}", replace, rendered)
+        rendered = re.sub(r"\[[^\]]+\]", "", rendered)
+        rendered = re.sub(r"[ \t]+\n", "\n", rendered)
+        rendered = re.sub(r"\n{3,}", "\n\n", rendered)
+        rendered = re.sub(r" +", " ", rendered)
+        return rendered.strip()
     # ------------------------------------------------------------------
     # Gemini model runner with fallbacks + rate-limit handling
     # ------------------------------------------------------------------
@@ -833,3 +891,4 @@ clearly named sub-keys with specific findings — no vague one-liners.
 
     def _socials(self, crawl: CrawlResult) -> list[str]:
         return sorted({s for p in crawl.pages for s in p.social_links})
+
