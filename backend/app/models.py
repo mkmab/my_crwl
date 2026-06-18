@@ -90,6 +90,7 @@ class AnalysisResponse(BaseModel):
     screenshot_url: str = ""
     pdf_url: str = ""
     ai_source: str = "local_fallback"
+    ai_failure_reason: str | None = None
     owner_name: str | None = None
     owner_email: str | None = None
     owner_first_name: str | None = None

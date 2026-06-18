@@ -36,12 +36,27 @@ class HuggingFaceAnalyzer:
     """
 
     async def analyze(self, crawl: CrawlResult, dom_snapshot: str | None = None) -> AnalysisResponse:
-        if not settings.huggingface_api_key:
-            raise RuntimeError("HUGGINGFACE_API_KEY is required for Hugging Face analysis.")
-
         fallback = GeminiAnalyzer().local_analysis(crawl)
+
+        if not settings.huggingface_api_key:
+            result = fallback.model_dump()
+            result["ai_source"] = "local_fallback"
+            result["ai_failure_reason"] = "Hugging Face API key is missing."
+            result["short_summary"] = (
+                "[Hugging Face API key missing. Showing local analysis.] "
+                + (fallback.short_summary or "")
+            )
+            return AnalysisResponse(**result)
+
         if not self._can_reach_hf():
-            return self._local_result(fallback, reason="Hugging Face API unreachable (network/DNS error)")
+            result = fallback.model_dump()
+            result["ai_source"] = "local_fallback"
+            result["ai_failure_reason"] = "Hugging Face API unreachable (network/DNS error)."
+            result["short_summary"] = (
+                "[Hugging Face API unreachable (network/DNS error). Showing local analysis.] "
+                + (fallback.short_summary or "")
+            )
+            return AnalysisResponse(**result)
 
         prompt = GeminiAnalyzer()._prompt(crawl, dom_snapshot)
         try:
@@ -65,9 +80,23 @@ class HuggingFaceAnalyzer:
             return AnalysisResponse(**merged)
 
         except _NETWORK_ERRORS as exc:
-            return self._local_result(fallback, reason=f"Network error: {exc}")
+            result = fallback.model_dump()
+            result["ai_source"] = "local_fallback"
+            result["ai_failure_reason"] = f"Hugging Face network error: {exc}"
+            result["short_summary"] = (
+                f"[Hugging Face network error: {exc}. Showing local analysis.] "
+                + (fallback.short_summary or "")
+            )
+            return AnalysisResponse(**result)
         except Exception as exc:
-            raise RuntimeError(f"Hugging Face analysis failed: {exc}") from exc
+            result = fallback.model_dump()
+            result["ai_source"] = "local_fallback"
+            result["ai_failure_reason"] = f"Hugging Face analysis failed: {exc}"
+            result["short_summary"] = (
+                f"[Hugging Face analysis failed: {exc}. Showing local analysis.] "
+                + (fallback.short_summary or "")
+            )
+            return AnalysisResponse(**result)
 
     async def generate_email(self, analysis: dict[str, Any], template: str) -> EmailResponse:
         fallback = GeminiAnalyzer().local_email(analysis, template)
@@ -95,17 +124,16 @@ class HuggingFaceAnalyzer:
     @staticmethod
     def _can_reach_hf() -> bool:
         try:
-            socket.setdefaulttimeout(3)
-            socket.getaddrinfo("router.huggingface.co", 443)
-            socket.getaddrinfo("api-inference.huggingface.co", 443)
-            return True
-        except (socket.gaierror, OSError):
+            resp = requests.head(HF_ROUTER_CHAT_URL, timeout=3)
+            return resp.status_code < 500
+        except requests.RequestException:
             return False
 
     @staticmethod
     def _local_result(fallback: AnalysisResponse, reason: str) -> AnalysisResponse:
         data = fallback.model_dump()
         data["ai_source"] = "local_fallback"
+        data["ai_failure_reason"] = reason
         data["short_summary"] = f"[{reason}. Showing local analysis.] " + (fallback.short_summary or "")
         return AnalysisResponse(**data)
 

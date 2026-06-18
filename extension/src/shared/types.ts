@@ -20,6 +20,7 @@ export interface AnalysisResponse {
   screenshot_url: string;
   pdf_url: string;
   ai_source: string;
+  ai_failure_reason?: string;
   owner_name: string | null;
   owner_email: string | null;
   owner_first_name: string | null;

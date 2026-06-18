@@ -117,9 +117,10 @@ class GeminiAnalyzer:
 
             return AnalysisResponse(**merged)
 
-        except _QuotaExhaustedError:
+        except _QuotaExhaustedError as exc:
             result = fallback.model_dump()
             result["ai_source"] = "local_fallback"
+            result["ai_failure_reason"] = "Gemini free-tier quota exhausted for today."
             result["short_summary"] = (
                 "[Gemini free-tier quota exhausted for today. Showing local analysis.] "
                 + (fallback.short_summary or "")
@@ -127,10 +128,14 @@ class GeminiAnalyzer:
             return AnalysisResponse(**result)
 
         except Exception as exc:
-            raise RuntimeError(
-                "Gemini analysis failed. Check API key, model access, and free-tier quota.\n"
-                f"{exc}"
-            ) from exc
+            result = fallback.model_dump()
+            result["ai_source"] = "local_fallback"
+            result["ai_failure_reason"] = f"Gemini analysis failed: {exc}"
+            result["short_summary"] = (
+                f"[Gemini analysis failed: {exc}. Showing local analysis.] "
+                + (fallback.short_summary or "")
+            )[:900]
+            return AnalysisResponse(**result)
 
     async def generate_email(self, analysis: dict[str, Any], template: str) -> EmailResponse:
         fallback = self.local_email(analysis, template)
