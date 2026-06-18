@@ -43,6 +43,7 @@ export interface CrawlResponse {
 export interface EmailResponse {
   subject: string;
   body: string;
+  signature?: string;
   ai_source: string;
 }
 
@@ -75,6 +76,9 @@ export interface ResearchJobState {
   tab: { url: string; title: string; tabId?: number };
   apiBaseUrl: string;
   emailTemplate: string;
+  emailSignature: string;
+  selectedEmailTemplateId?: string;
+  selectedSignatureTemplateId?: string;
   aiModel?: string;
   analysis: AnalysisResponse | null;
   email: EmailResponse | null;
@@ -84,3 +88,4 @@ export interface ResearchJobState {
   stages: JobStage[];
   updatedAt: number;
 }
+

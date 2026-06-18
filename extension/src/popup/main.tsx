@@ -19,16 +19,26 @@ import type {
   JobStage,
   ResearchJobState,
 } from "../shared/types";
+import {
+  composeTemplate,
+  customSignatureId,
+  customTemplateId,
+  defaultEmailSignature,
+  defaultEmailTemplate,
+  emailTemplates,
+  signatureTemplates,
+} from "../shared/emailTemplates";
 import "./styles.css";
 
 const fallbackApi = "http://127.0.0.1:8000";
-const defaultEmailTemplate =
-  '[their domain] or "quick site note" or "website question"\n\nYour [X page] is missing [specific thing] -- which means [consequence].\n\nFor a [type of business], that usually means [lost revenue / traffic / trust].\n\nI fix this kind of thing for [type of business].\n\nI put together [specific free thing] -- want me to send it over?';
 
 const emptyState: ResearchJobState = {
   tab: { url: "", title: "" },
   apiBaseUrl: fallbackApi,
   emailTemplate: defaultEmailTemplate,
+  emailSignature: defaultEmailSignature,
+  selectedEmailTemplateId: customTemplateId,
+  selectedSignatureTemplateId: "simple",
   aiModel: "auto",
   analysis: null,
   email: null,
@@ -64,7 +74,7 @@ function App() {
 
   function saveSettings(
     next: Partial<
-      Pick<ResearchJobState, "apiBaseUrl" | "emailTemplate" | "aiModel">
+      Pick<ResearchJobState, "apiBaseUrl" | "emailTemplate" | "emailSignature" | "selectedEmailTemplateId" | "selectedSignatureTemplateId" | "aiModel">
     >,
   ) {
     setState((prev) => {
@@ -73,12 +83,51 @@ function App() {
         type: "SAVE_SETTINGS",
         apiBaseUrl: updated.apiBaseUrl,
         emailTemplate: updated.emailTemplate,
+        emailSignature: updated.emailSignature,
+        selectedEmailTemplateId: updated.selectedEmailTemplateId,
+        selectedSignatureTemplateId: updated.selectedSignatureTemplateId,
         aiModel: (updated as any).aiModel || "auto",
       });
       return updated;
     });
   }
 
+  function selectEmailTemplate(templateId: string) {
+    if (templateId === customTemplateId) {
+      saveSettings({ selectedEmailTemplateId: customTemplateId });
+      return;
+    }
+    const template = emailTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    saveSettings({
+      selectedEmailTemplateId: templateId,
+      emailTemplate: composeTemplate(template, {
+        id: state.selectedSignatureTemplateId || customSignatureId,
+        name: "Selected signature",
+        body: state.emailSignature || defaultEmailSignature,
+      }),
+    });
+  }
+
+  function selectSignatureTemplate(signatureId: string) {
+    if (signatureId === customSignatureId) {
+      saveSettings({ selectedSignatureTemplateId: customSignatureId });
+      return;
+    }
+    const signature = signatureTemplates.find((item) => item.id === signatureId);
+    const template = emailTemplates.find(
+      (item) => item.id === state.selectedEmailTemplateId,
+    );
+    const emailSignature = signature?.body || defaultEmailSignature;
+    saveSettings({
+      selectedSignatureTemplateId: signatureId,
+      emailSignature,
+      emailTemplate:
+        template && signature
+          ? composeTemplate(template, signature)
+          : state.emailTemplate,
+    });
+  }
   function startAnalysis() {
     setCopied(false);
     chrome.runtime.sendMessage(
@@ -86,6 +135,9 @@ function App() {
         type: "SAVE_SETTINGS",
         apiBaseUrl: state.apiBaseUrl,
         emailTemplate: state.emailTemplate,
+        emailSignature: state.emailSignature,
+        selectedEmailTemplateId: state.selectedEmailTemplateId,
+        selectedSignatureTemplateId: state.selectedSignatureTemplateId,
         aiModel: (state as any).aiModel || "auto",
       },
       () => {
@@ -168,19 +220,72 @@ function App() {
             <option value="huggingface">Hugging Face</option>
           </select>
 
+          <label className="mt-4 block text-xs font-semibold text-slate-700">
+            Email template
+          </label>
+          <select
+            value={state.selectedEmailTemplateId || customTemplateId}
+            onChange={(event) => selectEmailTemplate(event.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs outline-none transition focus:border-slate-400"
+          >
+            <option value={customTemplateId}>Custom writing</option>
+            {emailTemplates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+              </option>
+            ))}
+          </select>
+
+          <label className="mt-3 block text-xs font-semibold text-slate-700">
+            Signature template
+          </label>
+          <select
+            value={state.selectedSignatureTemplateId || "simple"}
+            onChange={(event) => selectSignatureTemplate(event.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs outline-none transition focus:border-slate-400"
+          >
+            <option value={customSignatureId}>Custom signature in body</option>
+            {signatureTemplates.map((signature) => (
+              <option key={signature.id} value={signature.id}>
+                {signature.name}
+              </option>
+            ))}
+          </select>
+
           <label
-            className="mt-4 block text-xs font-semibold text-slate-700"
+            className="mt-3 block text-xs font-semibold text-slate-700"
+            htmlFor="email-signature"
+          >
+            Signature sent to AI
+          </label>
+          <textarea
+            id="email-signature"
+            value={state.emailSignature || defaultEmailSignature}
+            onChange={(event) =>
+              saveSettings({
+                emailSignature: event.target.value,
+                selectedSignatureTemplateId: customSignatureId,
+              })
+            }
+            className="mt-2 min-h-[76px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 outline-none transition focus:border-slate-400"
+          />
+
+          <label
+            className="mt-3 block text-xs font-semibold text-slate-700"
             htmlFor="email-template"
           >
-            Cold email format
+            Subject and body sent to AI
           </label>
           <textarea
             id="email-template"
             value={state.emailTemplate}
             onChange={(event) =>
-              saveSettings({ emailTemplate: event.target.value })
+              saveSettings({
+                emailTemplate: event.target.value,
+                selectedEmailTemplateId: customTemplateId,
+              })
             }
-            className="mt-2 min-h-[148px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 outline-none transition focus:border-slate-400"
+            className="mt-2 min-h-[168px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 outline-none transition focus:border-slate-400"
           />
 
           <div className="mt-4 flex gap-2">
@@ -564,3 +669,4 @@ function EmptyCard({
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
+
