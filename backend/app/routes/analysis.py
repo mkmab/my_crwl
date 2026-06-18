@@ -68,6 +68,7 @@ async def _run_analysis_with_fallbacks(payload: ResearchRequest) -> AnalysisResp
     if last_result is not None:
         if provider_errors:
             data = last_result.model_dump()
+            data["ai_failure_reason"] = f"AI providers unavailable: {'; '.join(provider_errors[:2])}."
             data["short_summary"] = (
                 f"[AI providers unavailable: {'; '.join(provider_errors[:2])}. Showing local analysis.] "
                 + (last_result.short_summary or "")
@@ -75,10 +76,17 @@ async def _run_analysis_with_fallbacks(payload: ResearchRequest) -> AnalysisResp
             return AnalysisResponse(**data)
         return last_result
 
-    raise HTTPException(
-        status_code=503,
-        detail="No AI provider could complete the analysis, and no local fallback was produced.",
+    fallback = GeminiAnalyzer().local_analysis(crawl)
+    data = fallback.model_dump()
+    data["ai_source"] = "local_fallback"
+    data["ai_failure_reason"] = (
+        f"All AI providers failed: {'; '.join(provider_errors)}."
     )
+    data["short_summary"] = (
+        "[All AI providers failed. Showing local analysis.] "
+        + (fallback.short_summary or "")
+    )[:900]
+    return AnalysisResponse(**data)
 
 
 async def _run_email_with_fallbacks(payload: EmailRequest) -> EmailResponse:

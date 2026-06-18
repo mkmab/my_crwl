@@ -470,6 +470,11 @@ function ResultHeader({ analysis }: { analysis: AnalysisResponse }) {
       <p className="mt-2 text-sm leading-5 text-slate-600">
         {analysis.short_summary}
       </p>
+      {analysis.ai_source === "local_fallback" && analysis.ai_failure_reason ? (
+        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="font-semibold">AI fallback reason:</span> {analysis.ai_failure_reason}
+        </p>
+      ) : null}
     </div>
   );
 }
